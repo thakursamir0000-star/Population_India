@@ -93,7 +93,7 @@ fig_bar.update_layout(
     font=dict(family="Inter,sans-serif", color=COLORS["muted"]),
     yaxis=dict(title="Population (Billions)", gridcolor=COLORS["grid"],
                linecolor=COLORS["border"], tickfont=dict(color=COLORS["muted"])),
-    xaxis=dict(gridcolor="transparent", linecolor=COLORS["border"]),
+    xaxis=dict(gridcolor="rgba(0,0,0,0)", linecolor=COLORS["border"]),
     margin=dict(l=20,r=20,t=30,b=30), height=320,
     showlegend=False,
     hoverlabel=dict(bgcolor="#0d1117", bordercolor=COLORS["blue"], font=dict(color=COLORS["text"])),
