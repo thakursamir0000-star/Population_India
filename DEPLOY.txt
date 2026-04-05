@@ -1,0 +1,22 @@
+# ===========================================================
+# DEPLOYMENT COMMANDS
+# Run these in PowerShell inside c:\MLOPS\pOPULTION_PREICT1\
+# ===========================================================
+
+# 1. Add your GitHub repo as remote (replace YOUR_USERNAME)
+git remote add origin https://github.com/YOUR_USERNAME/india-population-dashboard.git
+
+# 2. Push code to GitHub
+git branch -M main
+git push -u origin main
+
+# ===========================================================
+# That's it! Now deploy on Streamlit Cloud:
+# 1. Go to https://share.streamlit.io
+# 2. Sign in with GitHub
+# 3. Click "New app"
+# 4. Select repo: india-population-dashboard
+# 5. Branch: main
+# 6. Main file: app.py
+# 7. Click "Deploy!"
+# ===========================================================

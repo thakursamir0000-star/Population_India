@@ -1,472 +1,204 @@
 # ============================================================
-#  app.py  –  India Population Prediction Dashboard
-#  Run:  streamlit run app.py
+#  app.py  —  HOME PAGE
+#  Run: streamlit run app.py
 # ============================================================
 
 import streamlit as st
-import pandas as pd
-import numpy as np
+from src import (get_historical_df, META,
+                 PopulationModelSuite, fmt_pop, confidence_score,
+                 build_confidence_gauge)
 
-from data   import (get_historical_df, DECADAL_DATA, MILESTONE_DATA,
-                    WORLD_SHARE, META)
-from models import PopulationModelSuite, fmt_pop, confidence_score
-from charts import (build_forecast_chart, build_growth_chart,
-                    build_decadal_chart, build_milestones_chart,
-                    build_share_chart,  build_confidence_gauge,
-                    build_model_accuracy_chart)
-
-# ── Page config ───────────────────────────────────────────────
 st.set_page_config(
-    page_title  = "🇮🇳 India PopPredict | Demographics Dashboard",
+    page_title  = "🇮🇳 India PopPredict",
     page_icon   = "🇮🇳",
     layout      = "wide",
     initial_sidebar_state = "expanded",
 )
 
-# ── Custom CSS ────────────────────────────────────────────────
-st.markdown("""
+# ── Shared CSS (call on every page) ──────────────────────────
+def inject_css():
+    st.markdown("""
 <style>
-/* ---- Google Fonts ---- */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+html,body,.stApp{font-family:'Inter',sans-serif!important;}
+#MainMenu,footer,header{visibility:hidden;}
+.block-container{padding:1.5rem 2rem 3rem!important;max-width:1400px!important;}
 
-/* ---- Root variables ---- */
-:root {
-    --bg:      #060814;
-    --surface: #0d1117;
-    --card:    #111827;
-    --border:  rgba(255,255,255,0.07);
-    --blue:    #3b82f6;
-    --green:   #10b981;
-    --orange:  #f97316;
-    --purple:  #8b5cf6;
-    --text:    #f0f6ff;
-    --muted:   #94a3b8;
-}
+[data-testid="stSidebar"]{border-right:1px solid rgba(255,255,255,.07)!important;}
+[data-testid="stSidebarNav"] a{border-radius:10px!important;margin:2px 0;font-weight:500;}
+[data-testid="stSidebarNav"] a:hover{background:rgba(59,130,246,.12)!important;}
 
-/* ---- Global ---- */
-html, body, .stApp {
-    background-color: var(--bg) !important;
-    font-family: 'Inter', sans-serif !important;
-    color: var(--text) !important;
-}
+[data-testid="metric-container"]{
+    background:#111827!important;border:1px solid rgba(255,255,255,.07)!important;
+    border-radius:14px!important;padding:18px 20px!important;transition:all .3s ease;}
+[data-testid="metric-container"]:hover{
+    border-color:rgba(59,130,246,.3)!important;
+    transform:translateY(-2px);box-shadow:0 8px 40px rgba(0,0,0,.4);}
+[data-testid="stMetricLabel"]{font-size:.72rem!important;text-transform:uppercase;letter-spacing:.08em;color:#94a3b8!important;}
+[data-testid="stMetricValue"]{font-family:'Space Grotesk',sans-serif!important;font-size:1.55rem!important;font-weight:700!important;}
+[data-testid="stMetricDelta"]{font-size:.8rem!important;font-weight:600!important;}
 
-/* ---- Hide Streamlit chrome ---- */
-#MainMenu, footer, header { visibility: hidden; }
-.block-container { padding: 1.5rem 2rem 3rem !important; max-width: 1400px !important; }
+[data-testid="stPlotlyChart"]{
+    border:1px solid rgba(255,255,255,.07);border-radius:14px;overflow:hidden;
+    transition:border-color .3s,box-shadow .3s;}
+[data-testid="stPlotlyChart"]:hover{border-color:rgba(59,130,246,.25);box-shadow:0 4px 40px rgba(0,0,0,.4);}
 
-/* ---- Sidebar ---- */
-[data-testid="stSidebar"] {
-    background: var(--surface) !important;
-    border-right: 1px solid var(--border) !important;
-}
-[data-testid="stSidebar"] * { color: var(--text) !important; }
-[data-testid="stSidebar"] .stSelectbox label,
-[data-testid="stSidebar"] .stSlider label,
-[data-testid="stSidebar"] .stNumberInput label {
-    color: var(--muted) !important;
-    font-size: 0.75rem !important;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-}
+.stButton>button{
+    background:linear-gradient(135deg,#3b82f6,#8b5cf6,#ec4899)!important;
+    color:#fff!important;border:none!important;border-radius:10px!important;
+    padding:12px 24px!important;font-weight:700!important;font-size:.9rem!important;
+    width:100%!important;transition:all .3s!important;}
+.stButton>button:hover{transform:translateY(-2px)!important;box-shadow:0 8px 30px rgba(59,130,246,.4)!important;}
 
-/* ---- Metric cards (st.metric) ---- */
-[data-testid="metric-container"] {
-    background: var(--card) !important;
-    border: 1px solid var(--border) !important;
-    border-radius: 14px !important;
-    padding: 18px 20px !important;
-    transition: all 0.3s ease;
-}
-[data-testid="metric-container"]:hover {
-    border-color: rgba(59,130,246,0.3) !important;
-    transform: translateY(-2px);
-    box-shadow: 0 8px 40px rgba(0,0,0,0.4);
-}
-[data-testid="stMetricLabel"]  { color: var(--muted) !important; font-size: 0.72rem !important; text-transform: uppercase; letter-spacing: 0.08em; }
-[data-testid="stMetricValue"]  { color: var(--text)  !important; font-family: 'Space Grotesk', sans-serif !important; font-size: 1.6rem !important; font-weight: 700 !important; }
-[data-testid="stMetricDelta"]  { font-size: 0.8rem !important; font-weight: 600 !important; }
+.stNumberInput input,.stSelectbox>div>div{
+    background:rgba(255,255,255,.04)!important;border:1px solid rgba(255,255,255,.07)!important;border-radius:8px!important;}
+.stNumberInput input:focus{border-color:#3b82f6!important;box-shadow:0 0 0 3px rgba(59,130,246,.25)!important;}
 
-/* ---- Plotly charts ---- */
-[data-testid="stPlotlyChart"] {
-    border: 1px solid var(--border);
-    border-radius: 14px;
-    overflow: hidden;
-    transition: border-color 0.3s ease, box-shadow 0.3s ease;
-}
-[data-testid="stPlotlyChart"]:hover {
-    border-color: rgba(59,130,246,0.25);
-    box-shadow: 0 4px 40px rgba(0,0,0,0.4);
-}
+[data-testid="stDataFrame"]{border:1px solid rgba(255,255,255,.07)!important;border-radius:12px!important;overflow:hidden;}
+hr{border-color:rgba(255,255,255,.07)!important;}
 
-/* ---- Buttons ---- */
-.stButton > button {
-    background: linear-gradient(135deg, #3b82f6, #8b5cf6, #ec4899) !important;
-    color: #fff !important;
-    border: none !important;
-    border-radius: 10px !important;
-    padding: 12px 24px !important;
-    font-weight: 700 !important;
-    font-size: 0.9rem !important;
-    letter-spacing: 0.02em !important;
-    width: 100% !important;
-    transition: all 0.3s ease !important;
-    font-family: 'Inter', sans-serif !important;
-}
-.stButton > button:hover {
-    transform: translateY(-2px) !important;
-    box-shadow: 0 8px 30px rgba(59,130,246,0.4) !important;
-}
+.hero{background:linear-gradient(135deg,rgba(59,130,246,.08),rgba(139,92,246,.08));
+      border:1px solid rgba(59,130,246,.15);border-radius:20px;
+      padding:2.5rem 3rem;margin-bottom:1.5rem;text-align:center;}
+.hero-title{font-family:'Space Grotesk',sans-serif;font-size:2.8rem;font-weight:800;
+            background:linear-gradient(135deg,#3b82f6,#8b5cf6,#ec4899);
+            -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+.hero-sub{color:#94a3b8;font-size:1rem;}
+.badge{display:inline-block;background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.3);
+       border-radius:99px;padding:4px 16px;font-size:.7rem;font-weight:600;
+       letter-spacing:.12em;color:#3b82f6;text-transform:uppercase;margin-bottom:.75rem;}
+.section-title{font-family:'Space Grotesk',sans-serif;font-size:1.05rem;font-weight:700;color:#f0f6ff;}
+.section-sub{font-size:.75rem;color:#94a3b8;margin-bottom:.75rem;}
+.pred-box{background:linear-gradient(135deg,rgba(59,130,246,.08),rgba(139,92,246,.08));
+          border:1px solid rgba(59,130,246,.25);border-radius:14px;padding:1.5rem;text-align:center;}
+.pred-year{font-size:.72rem;color:#3b82f6;text-transform:uppercase;letter-spacing:.12em;font-weight:600;}
+.pred-pop{font-family:'Space Grotesk',sans-serif;font-size:1.9rem;font-weight:800;
+          background:linear-gradient(135deg,#3b82f6,#8b5cf6,#ec4899);
+          -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+.pred-model{font-size:.72rem;color:#94a3b8;}
+.info-card{background:#111827;border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:1.25rem 1.5rem;}
+.info-num{font-family:'Space Grotesk',sans-serif;font-size:1.5rem;font-weight:700;
+          background:linear-gradient(135deg,#3b82f6,#8b5cf6);
+          -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+.info-label{font-size:.72rem;color:#94a3b8;text-transform:uppercase;letter-spacing:.08em;}
+.live-dot{display:inline-block;width:8px;height:8px;background:#10b981;
+          border-radius:50%;animation:pulse 2s infinite;margin-right:6px;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.6}}
+</style>""", unsafe_allow_html=True)
 
-/* ---- Inputs ---- */
-.stNumberInput input, .stSelectbox select,
-[data-testid="stNumberInput"] input {
-    background: rgba(255,255,255,0.04) !important;
-    border: 1px solid var(--border) !important;
-    border-radius: 8px !important;
-    color: var(--text) !important;
-    font-family: 'Space Grotesk', sans-serif !important;
-    font-weight: 600 !important;
-    font-size: 1rem !important;
-}
-.stNumberInput input:focus { border-color: var(--blue) !important; box-shadow: 0 0 0 3px rgba(59,130,246,0.25) !important; }
+inject_css()
 
-/* ---- Selectbox ---- */
-.stSelectbox > div > div {
-    background: rgba(255,255,255,0.04) !important;
-    border: 1px solid var(--border) !important;
-    border-radius: 8px !important;
-    color: var(--text) !important;
-}
-
-/* ---- Dataframe / table ---- */
-[data-testid="stDataFrame"] {
-    border: 1px solid var(--border) !important;
-    border-radius: 12px !important;
-    overflow: hidden;
-}
-
-/* ---- Divider ---- */
-hr { border-color: var(--border) !important; }
-
-/* ── Custom components ── */
-.hero-header {
-    background: linear-gradient(135deg, rgba(59,130,246,0.08), rgba(139,92,246,0.08));
-    border: 1px solid rgba(59,130,246,0.15);
-    border-radius: 20px;
-    padding: 2rem 2.5rem;
-    margin-bottom: 2rem;
-    text-align: center;
-}
-.hero-title {
-    font-family: 'Space Grotesk', sans-serif;
-    font-size: 2.8rem;
-    font-weight: 800;
-    background: linear-gradient(135deg, #3b82f6, #8b5cf6, #ec4899);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    line-height: 1.2;
-    margin: 0 0 0.5rem;
-}
-.hero-sub {
-    color: #94a3b8;
-    font-size: 1rem;
-    max-width: 600px;
-    margin: 0 auto;
-}
-.section-title {
-    font-family: 'Space Grotesk', sans-serif;
-    font-size: 1.1rem;
-    font-weight: 700;
-    color: #f0f6ff;
-    margin: 0 0 0.25rem;
-}
-.section-sub {
-    font-size: 0.75rem;
-    color: #94a3b8;
-    margin-bottom: 1rem;
-}
-.pred-result-box {
-    background: linear-gradient(135deg, rgba(59,130,246,0.08), rgba(139,92,246,0.08));
-    border: 1px solid rgba(59,130,246,0.25);
-    border-radius: 14px;
-    padding: 1.5rem;
-    text-align: center;
-    margin-top: 1rem;
-}
-.pred-year  { font-size: 0.75rem; color: #3b82f6; text-transform: uppercase; letter-spacing: 0.12em; font-weight: 600; }
-.pred-pop   { font-family: 'Space Grotesk'; font-size: 1.8rem; font-weight: 800; background: linear-gradient(135deg, #3b82f6, #8b5cf6, #ec4899); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; margin: 6px 0; }
-.pred-model { font-size: 0.72rem; color: #94a3b8; }
-.live-dot   { display: inline-block; width: 8px; height: 8px; background: #10b981; border-radius: 50%; animation: pulse 2s infinite; margin-right: 6px; }
-.badge      { display: inline-block; background: rgba(59,130,246,0.12); border: 1px solid rgba(59,130,246,0.3); border-radius: 99px; padding: 4px 14px; font-size: 0.7rem; font-weight: 600; letter-spacing: 0.1em; color: #3b82f6; text-transform: uppercase; }
-@keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.6;} }
-
-/* ---- Slider ---- */
-.stSlider [data-testid="stThumbValue"] { color: var(--text) !important; }
-.stSlider [data-baseweb="slider"] div  { background: var(--blue) !important; }
-</style>
-""", unsafe_allow_html=True)
-
-
-# ═══════════════════════════════════════════════════════════
-#  Load & cache models
-# ═══════════════════════════════════════════════════════════
+# ── Cache model suite ─────────────────────────────────────────
 @st.cache_resource(show_spinner="⚙️ Fitting prediction models…")
-def load_models():
-    hist = get_historical_df()
+def load_suite():
+    hist  = get_historical_df()
     suite = PopulationModelSuite()
     suite.fit(hist["year"].tolist(), hist["population"].tolist())
     return suite, hist
 
-suite, hist_df = load_models()
+suite, hist_df = load_suite()
 
-# Forecast for 2026-2075
-current_year = META["current_year"]
-future_years = list(range(current_year + 1, 2076))
-forecast_df  = suite.forecast_df(future_years)
-
-peak_year = suite.find_peak_year()
-pred_2030 = suite.polynomial.predict(2030)
-pred_2050 = suite.logistic.predict(2050)
-pred_2075 = suite.logistic.predict(2075)
-curr_pop  = META["current_pop"]
-
-
-# ═══════════════════════════════════════════════════════════
-#  SIDEBAR
-# ═══════════════════════════════════════════════════════════
+# ── Sidebar ───────────────────────────────────────────────────
 with st.sidebar:
     st.markdown("""
-    <div style="text-align:center;padding:1rem 0 1.5rem;">
-        <div style="font-size:3rem;">🇮🇳</div>
-        <div style="font-family:'Space Grotesk';font-weight:700;font-size:1.1rem;
+    <div style="text-align:center;padding:.5rem 0 1rem;">
+        <div style="font-size:2.5rem;">🇮🇳</div>
+        <div style="font-family:'Space Grotesk';font-weight:700;font-size:1rem;
                     background:linear-gradient(135deg,#3b82f6,#8b5cf6,#ec4899);
-                    -webkit-background-clip:text;-webkit-text-fill-color:transparent;
-                    background-clip:text;">
+                    -webkit-background-clip:text;-webkit-text-fill-color:transparent;">
             India PopPredict
         </div>
-        <div style="font-size:0.65rem;color:#4b5563;text-transform:uppercase;letter-spacing:0.12em;">
+        <div style="font-size:.62rem;color:#4b5563;text-transform:uppercase;letter-spacing:.12em;">
             Demographics Analytics
         </div>
-        <hr style="border-color:rgba(255,255,255,0.07);margin:1rem 0 0.5rem;">
-    </div>
-    """, unsafe_allow_html=True)
+        <hr style="border-color:rgba(255,255,255,.07);margin:.75rem 0;">
+    </div>""", unsafe_allow_html=True)
 
-    st.markdown('<div class="section-title">🎯 Year Predictor</div>', unsafe_allow_html=True)
-    st.markdown('<div class="section-sub">Predict population for any year</div>', unsafe_allow_html=True)
-
-    pred_year  = st.number_input("Target Year", min_value=1950, max_value=2100,
-                                 value=2040, step=1, key="pred_year_input")
-    pred_model = st.selectbox("Model", ["Polynomial", "Linear", "Logistic"],
-                              index=0, key="pred_model_sel")
-
-    predict_clicked = st.button("🔮 Predict Population", key="pred_btn")
+    st.markdown("**🎯 Quick Predictor**")
+    pred_year  = st.number_input("Target Year", 1950, 2100, 2040, key="home_year")
+    pred_model = st.selectbox("Model", ["Polynomial","Linear","Logistic"], key="home_model")
+    go = st.button("🔮 Predict Population", key="home_go")
 
     st.markdown("---")
-    st.markdown('<div class="section-title">⚙️ Display Options</div>', unsafe_allow_html=True)
-    show_linear     = st.checkbox("Show Linear Model",     value=True)
-    show_poly       = st.checkbox("Show Polynomial Model", value=True)
-    show_logistic   = st.checkbox("Show Logistic Model",   value=True)
+    st.caption("📂 **Navigate using pages above ↑**")
+    st.caption("Data: UN World Population Prospects & Census of India")
 
-    st.markdown("---")
-    st.markdown('<div class="section-title">📊 Model Stats</div>', unsafe_allow_html=True)
-    stats_df = suite.model_stats()
-    st.dataframe(stats_df, use_container_width=True, hide_index=True)
-
-    st.markdown("---")
-    st.markdown("""
-    <div style="font-size:0.65rem;color:#4b5563;line-height:1.8;text-align:center;">
-        <span class='live-dot'></span>Data: UN World Population Prospects<br>
-        + Census of India<br>
-        Models: sklearn + scipy
-    </div>
-    """, unsafe_allow_html=True)
-
-
-# ═══════════════════════════════════════════════════════════
-#  HERO HEADER
-# ═══════════════════════════════════════════════════════════
+# ── Hero ──────────────────────────────────────────────────────
 st.markdown("""
-<div class="hero-header">
-    <span class="badge">POPULATION INTELLIGENCE PLATFORM</span>
-    <div class="hero-title" style="margin-top:0.75rem;">
-        India's Population Forecast
-    </div>
-    <div class="hero-sub">
-        Advanced demographic forecasting using Linear, Polynomial & Logistic Regression.
-        Historical data 1950–2024 with projections through 2075.
-    </div>
-</div>
-""", unsafe_allow_html=True)
+<div class="hero">
+  <div class="badge">🇮🇳 Population Intelligence Platform</div>
+  <div class="hero-title">India's Population Forecast</div>
+  <div class="hero-sub">
+    Advanced demographic forecasting · Linear, Polynomial &amp; Logistic Regression<br>
+    Historical data 1950–2025 · Projections through 2075
+  </div>
+</div>""", unsafe_allow_html=True)
 
+# ── KPI Metrics ───────────────────────────────────────────────
+curr = META["current_pop"]
+p30  = suite.polynomial.predict(2030)
+p50  = suite.logistic.predict(2050)
+p75  = suite.logistic.predict(2075)
+peak = suite.find_peak_year()
 
-# ═══════════════════════════════════════════════════════════
-#  KPI METRICS ROW
-# ═══════════════════════════════════════════════════════════
-c1, c2, c3, c4, c5 = st.columns(5)
-with c1:
-    st.metric("🌏 Population (2024)", "1.442 Billion",
-              delta=f"+{META['growth_rate']}% annual")
-with c2:
-    pct30 = ((pred_2030 - curr_pop) / curr_pop * 100)
-    st.metric("📈 Predicted 2030", fmt_pop(pred_2030, short=True),
-              delta=f"+{pct30:.1f}% vs today")
-with c3:
-    pct50 = ((pred_2050 - curr_pop) / curr_pop * 100)
-    st.metric("🔮 Predicted 2050", fmt_pop(pred_2050, short=True),
-              delta=f"{pct50:+.1f}% vs today")
-with c4:
-    pct75 = ((pred_2075 - curr_pop) / curr_pop * 100)
-    st.metric("🌐 Predicted 2075", fmt_pop(pred_2075, short=True),
-              delta=f"{pct75:+.1f}% vs today")
-with c5:
-    st.metric("⏰ Peak Year (Logistic)", str(peak_year),
-              delta="Population apex")
+k1,k2,k3,k4,k5 = st.columns(5)
+with k1: st.metric("🌏 Population (2025)", "1.442 B",          f"+{META['growth_rate']}% annual")
+with k2: st.metric("📈 Predicted 2030",    fmt_pop(p30,True),  f"+{(p30-curr)/curr*100:.1f}% vs today")
+with k3: st.metric("🔮 Predicted 2050",    fmt_pop(p50,True),  f"{(p50-curr)/curr*100:+.1f}% vs today")
+with k4: st.metric("🌐 Predicted 2075",    fmt_pop(p75,True),  f"{(p75-curr)/curr*100:+.1f}% vs today")
+with k5: st.metric("⏰ Peak Year",          str(peak),          "Logistic model apex")
 
 st.markdown("<br>", unsafe_allow_html=True)
 
+# ── Prediction result ─────────────────────────────────────────
+model_map = {"Polynomial":suite.polynomial,"Linear":suite.linear,"Logistic":suite.logistic}
+if go or "home_pred" not in st.session_state:
+    r = model_map[pred_model].predict(int(pred_year))
+    st.session_state["home_pred"] = dict(
+        year=pred_year, pop=r, model=pred_model,
+        conf=confidence_score(int(pred_year), META["current_year"]))
 
-# ═══════════════════════════════════════════════════════════
-#  PREDICTION RESULT  (sidebar button → main area)
-# ═══════════════════════════════════════════════════════════
-if predict_clicked or "last_pred" not in st.session_state:
-    model_map = {
-        "Polynomial": suite.polynomial,
-        "Linear":     suite.linear,
-        "Logistic":   suite.logistic,
-    }
-    chosen   = model_map[pred_model]
-    result   = chosen.predict(int(pred_year))
-    conf     = confidence_score(int(pred_year))
-    st.session_state["last_pred"] = {
-        "year":   pred_year,
-        "pop":    result,
-        "model":  pred_model,
-        "conf":   conf,
-    }
+p = st.session_state["home_pred"]
+pc1, pc2 = st.columns([3,1])
+with pc1:
+    st.markdown(f"""
+    <div class="pred-box">
+      <div class="pred-year">YEAR {p['year']} PREDICTION</div>
+      <div class="pred-pop">{fmt_pop(p['pop'])}</div>
+      <div class="pred-model">{p['model']} Regression Model &nbsp;·&nbsp;
+        <span style="color:#10b981;font-weight:600;">{p['conf']}% Confidence</span>
+      </div>
+    </div>""", unsafe_allow_html=True)
+with pc2:
+    st.plotly_chart(build_confidence_gauge(p["conf"]),
+                    use_container_width=True, config={"displayModeBar":False})
 
-if "last_pred" in st.session_state:
-    p = st.session_state["last_pred"]
-    pred_col1, pred_col2 = st.columns([3, 1])
+st.markdown("<br>", unsafe_allow_html=True)
 
-    with pred_col1:
+# ── Quick Fact Cards ──────────────────────────────────────────
+st.markdown('<div class="section-title">📌 Key Demographic Facts</div>', unsafe_allow_html=True)
+st.markdown('<div class="section-sub">Snapshot of India\'s current demographic indicators</div>', unsafe_allow_html=True)
+
+facts = [
+    ("1.442 B",  "Total Population 2025"), ("464 /km²", "Population Density"),
+    ("#1",        "World Rank (since 2023)"),("28.2 yrs", "Median Age"),
+    ("0.89%",     "Annual Growth Rate"),    ("~6.5M",    "Net Annual Increase"),
+    ("67.9%",     "Working-age Share"),     ("~2075",    "Projected Peak Year"),
+]
+cols = st.columns(4)
+for i,(num,label) in enumerate(facts):
+    with cols[i%4]:
         st.markdown(f"""
-        <div class="pred-result-box">
-            <div class="pred-year">YEAR {p['year']} PREDICTION</div>
-            <div class="pred-pop">{fmt_pop(p['pop'])}</div>
-            <div class="pred-model">{p['model']} Regression Model &nbsp;·&nbsp;
-                <span style="color:#10b981;font-weight:600;">{p['conf']}% Confidence</span>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        <div class="info-card" style="margin-bottom:1rem;">
+          <div class="info-num">{num}</div>
+          <div class="info-label">{label}</div>
+        </div>""", unsafe_allow_html=True)
 
-    with pred_col2:
-        fig_gauge = build_confidence_gauge(p["conf"])
-        st.plotly_chart(fig_gauge, use_container_width=True, config={"displayModeBar": False})
-
-    st.markdown("<br>", unsafe_allow_html=True)
-
-
-# ═══════════════════════════════════════════════════════════
-#  MAIN FORECAST CHART  (full width)
-# ═══════════════════════════════════════════════════════════
-st.markdown('<div class="section-title">📈 Population Forecast: 1950 – 2075</div>', unsafe_allow_html=True)
-st.markdown('<div class="section-sub">Historical record with three predictive model projections through 2075</div>', unsafe_allow_html=True)
-
-# Filter models per checkbox
-filtered_forecast = forecast_df.copy()
-if not show_linear:   filtered_forecast["Linear"]     = None
-if not show_poly:     filtered_forecast["Polynomial"] = None
-if not show_logistic: filtered_forecast["Logistic"]   = None
-
-fig_main = build_forecast_chart(hist_df, filtered_forecast)
-st.plotly_chart(fig_main, use_container_width=True, config={"displayModeBar": True})
-
-st.markdown("<br>", unsafe_allow_html=True)
-
-
-# ═══════════════════════════════════════════════════════════
-#  ROW 2 — Growth Rate + Decadal Chart
-# ═══════════════════════════════════════════════════════════
-col_a, col_b = st.columns(2)
-
-with col_a:
-    st.markdown('<div class="section-title">📉 Annual Growth Rate Trend</div>', unsafe_allow_html=True)
-    st.markdown('<div class="section-sub">Year-over-year population growth percentage, 1951–2024</div>', unsafe_allow_html=True)
-    fig_growth = build_growth_chart(hist_df)
-    st.plotly_chart(fig_growth, use_container_width=True, config={"displayModeBar": False})
-
-with col_b:
-    st.markdown('<div class="section-title">📊 Decadal Census Growth Rate</div>', unsafe_allow_html=True)
-    st.markdown('<div class="section-sub">Official census-based growth percentage per decade</div>', unsafe_allow_html=True)
-    fig_decadal = build_decadal_chart(DECADAL_DATA)
-    st.plotly_chart(fig_decadal, use_container_width=True, config={"displayModeBar": False})
-
-st.markdown("<br>", unsafe_allow_html=True)
-
-
-# ═══════════════════════════════════════════════════════════
-#  ROW 3 — Milestones + World Share
-# ═══════════════════════════════════════════════════════════
-col_c, col_d = st.columns(2)
-
-with col_c:
-    st.markdown('<div class="section-title">🏆 Population Growth Milestones</div>', unsafe_allow_html=True)
-    st.markdown('<div class="section-sub">Years taken to add each successive 100 million people</div>', unsafe_allow_html=True)
-    fig_miles = build_milestones_chart(MILESTONE_DATA)
-    st.plotly_chart(fig_miles, use_container_width=True, config={"displayModeBar": False})
-
-with col_d:
-    st.markdown('<div class="section-title">🌍 India vs China — World Share</div>', unsafe_allow_html=True)
-    st.markdown('<div class="section-sub">Each country\'s share of total global population over time</div>', unsafe_allow_html=True)
-    fig_share = build_share_chart(WORLD_SHARE)
-    st.plotly_chart(fig_share, use_container_width=True, config={"displayModeBar": False})
-
-st.markdown("<br>", unsafe_allow_html=True)
-
-
-# ═══════════════════════════════════════════════════════════
-#  ROW 4 — Model accuracy + Projection Table
-# ═══════════════════════════════════════════════════════════
-col_e, col_f = st.columns([1, 2])
-
-with col_e:
-    st.markdown('<div class="section-title">🎯 Model Accuracy (R²)</div>', unsafe_allow_html=True)
-    st.markdown('<div class="section-sub">R² score on historical training data</div>', unsafe_allow_html=True)
-    fig_acc = build_model_accuracy_chart(stats_df)
-    st.plotly_chart(fig_acc, use_container_width=True, config={"displayModeBar": False})
-
-with col_f:
-    st.markdown('<div class="section-title">📋 Projection Table (2025–2075)</div>', unsafe_allow_html=True)
-    st.markdown('<div class="section-sub">Side-by-side comparison of all three models</div>', unsafe_allow_html=True)
-    table_years = [2025, 2030, 2035, 2040, 2045, 2050, 2055, 2060, 2065, 2070, 2075]
-    table_data  = []
-    for y in table_years:
-        preds = suite.predict_all(y)
-        table_data.append({
-            "Year":            y,
-            "Linear":          fmt_pop(preds["Linear"],     short=True),
-            "Polynomial":      fmt_pop(preds["Polynomial"], short=True),
-            "Logistic":        fmt_pop(preds["Logistic"],   short=True),
-        })
-    tdf = pd.DataFrame(table_data)
-    st.dataframe(
-        tdf.style.applymap(lambda _: "background-color: rgba(59,130,246,0.07);", subset=["Polynomial"]),
-        use_container_width=True,
-        hide_index=True,
-        height=330,
-    )
-
-
-# ═══════════════════════════════════════════════════════════
-#  FOOTER
-# ═══════════════════════════════════════════════════════════
+# ── Footer ────────────────────────────────────────────────────
 st.markdown("---")
 st.markdown("""
-<div style="text-align:center;color:#4b5563;font-size:0.75rem;padding:1rem 0 2rem;line-height:2;">
-    🇮🇳 <strong style="color:#94a3b8;">India PopPredict Dashboard</strong><br>
-    Data sourced from UN World Population Prospects &amp; Census of India.<br>
-    Models: Linear Regression · Polynomial Regression (deg 3) · Logistic S-Curve<br>
-    Built with Python · Streamlit · Plotly · scikit-learn · scipy
-</div>
-""", unsafe_allow_html=True)
+<div style="text-align:center;color:#4b5563;font-size:.72rem;line-height:2;">
+  🇮🇳 <b style="color:#94a3b8;">India PopPredict</b> &nbsp;|&nbsp;
+  Data: UN World Population Prospects &amp; Census of India &nbsp;|&nbsp;
+  Built with Python · Streamlit · Plotly · scikit-learn · scipy
+</div>""", unsafe_allow_html=True)
