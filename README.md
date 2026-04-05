@@ -1,5 +1,9 @@
 # 🇮🇳 India Population Prediction Dashboard
 
+[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://populationindia-k9drvpgkxjwei2tlnm5ctr.streamlit.app/)
+
+**🌐 Live Application:** [India PopPredict on Streamlit](https://populationindia-k9drvpgkxjwei2tlnm5ctr.streamlit.app/)
+
 An interactive demographic analytics dashboard built with **Python**, **Streamlit**, and **Plotly**.
 
 ## 🔮 Features
